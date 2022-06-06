@@ -1,0 +1,14 @@
+__pycache__/
+r1/
+*.pyc
+*.txt
+*.log
+*.pem
+*.db
+*.json
+*.bat
+check_NAS_and_reupload_to_external_host.py
+cleanup.py
+corrupt_bin_recovery.py
+mark_removed_mirrors.py
+move_files_already_in_DB.py

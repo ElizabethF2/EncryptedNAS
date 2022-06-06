@@ -1,0 +1,638 @@
+<html>
+  <head>
+    <title>EncryptedNAS</title>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/jquery/3.2.1/jquery.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.js'></script>
+    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.css' />
+    <script>
+      var IMAGE_PERFORMANCE_MAGIC = 1106500;
+      var image_limit = new Date();
+      for(var i=0;i<1e9;i++);
+      var image_limit = Math.min(IMAGE_PERFORMANCE_MAGIC/((new Date())-image_limit), 80);
+
+      var apiCall = function(method, URL, requestBody, callback){
+        if (window.location.href.slice(-1) != '/')
+        {
+          URL = window.location + '/' + URL;
+        }
+
+        var xhr = new XMLHttpRequest();
+        xhr.open(method, URL);
+        
+        xhr.onreadystatechange = function(){
+          if(xhr.readyState == 4){
+            var res;
+            try {
+              res = JSON.parse(xhr.responseText);
+            } catch(e) {
+              res = xhr.responseText;
+            }
+            
+            if (res.error == 'Unauthenticated') {
+              show_login();
+            } else if(callback){
+              callback(res);
+            }
+          }
+        }
+        
+        if(requestBody){
+          xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
+          xhr.send(JSON.stringify(requestBody));
+        } else {
+          xhr.send();
+        }
+      };
+      
+      var show_login = function() {
+        document.querySelector('.login_box').classList.add('show');
+      }
+      
+      var do_login = function() {
+        var password = document.querySelector('#passbox').value;
+        apiCall('POST', './login', {'password': password}, function() {
+          window.location.reload();
+        });
+      }
+      
+      var do_logout = function() {
+        if (confirm('Really logout?')) {
+          apiCall('POST', './logout', null, function() {
+            window.location.reload();
+          });
+        }
+      }
+
+      var get_extension = function(file){
+        return file[1].split('.').splice(-1)[0].toLowerCase();
+      }
+
+      var isImage = function(file){
+        var ext = get_extension(file);
+        return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'jfif', 'webp'].includes(ext);
+      };
+
+      var clean_name = function(file){
+        return file[1].slice(37);
+      };
+
+      var delay_load_images = function(){
+        var im = document.querySelector('[x-loaded=false]');
+        if (im)
+        {
+          im.src = im.getAttribute('x-src');
+          im.setAttribute('x-loaded', true);
+          im.onerror = queue_for_retry;
+          im.onload = remove_from_retry_queue;
+          setTimeout(delay_load_images, 200);
+        }
+      };
+
+      var remove_from_retry_queue = function(event){
+        var im = event.target;
+        var idx = window.retry_queue.indexOf(im);
+        if (idx != -1)
+        {
+          window.retry_queue.splice(idx, 1);
+        }
+      };
+
+      var queue_for_retry = function(event){
+        var im = event.target;
+        im.removeAttribute('src');
+        window.retry_queue.push(im);
+        setTimeout(process_retry_queue, (Math.random()*10000)|1);
+      };
+      
+      var process_retry_queue = function() {
+        if (window.retry_queue.length == 0)
+        {
+          return;
+        }
+
+        var im = retry_queue.pop();
+        im.src = im.getAttribute('x-src');
+      };
+
+      var pages = [],
+          current_page = 0;
+      
+      var navigate_page = function(p){
+        if (p == 'n' && current_page < pages.length)
+          current_page++;
+        
+        if (p == 'p' && current_page > 1)
+          current_page--;
+        
+        if (p != 'n' && p != 'p')
+          current_page = p;
+        
+        populate_results_box(pages[current_page-1], current_page);
+      };
+
+
+
+      var populate_results_box = function(results, page = 0){
+        rbox = document.querySelector('.results_box');
+        rbox.innerHTML = '';
+        
+        if (page > 1){
+          rbox.innerHTML += '<span onclick="navigate_page(\'p\')">&#11164;</div>';
+        }
+        
+        if (page>0 && page<pages.length){
+          rbox.innerHTML += '<span onclick="navigate_page(\'n\')">&#11166;</div>';
+        }
+        
+        if (rbox.innerHTML){
+          rbox.innerHTML += '<br>';
+        }
+        
+        if ( (page > 1) || (page>0 && page<pages.length) ){
+          rbox.innerHTML += '<br>';
+        }
+
+        for (file of results)
+        {
+          if (isImage(file))
+          {
+            rbox.innerHTML += '<img x-loaded="false" x-src="'+file[5]+'" x-name="'+file[1]+'" class="thumbnail file">&nbsp;';
+          }
+          else
+          {
+            rbox.innerHTML += '<br><a href="'+file[5]+'" x-name="'+file[1]+'" class="file" target="_blank">'+clean_name(file)+'</a><br>';
+          }
+        }
+        for (e of document.querySelectorAll('.thumbnail'))
+        {
+          e.addEventListener('click', start_slideshow);
+        }
+        for(e of document.querySelectorAll('.file'))
+        {
+          e.addEventListener('contextmenu', open_context_menu);
+        }
+        if (results.length)
+        {
+          window.retry_queue = [];
+          delay_load_images();
+        }
+      };
+
+      var display_results = function(results){
+        slides = [];
+        for (file of results)
+        {
+          if (!file[5])
+          {
+            var ext = get_extension(file);
+            file[5] = (window.location.pathname+'/cache/'+file[3]+'.'+ext+'?name='+clean_name(file).replace(/\s/g, '_')).replace('//', '/');
+          }
+          else if (file[5].length > 1 && file[5][0] == '/' && file[5][1] != '/')
+          {
+            var base = window.location.pathname
+            if (base.slice(-1) == '/')
+            {
+              base = base.slice(0,-1);
+            }
+            file[5] = base+file[5];
+          }
+
+          if (isImage(file))
+            slides.push(file[5]);
+        }
+        
+        var paginated = (slides.length > image_limit);
+        if (!paginated){
+          populate_results_box(results);
+        } else {
+          current_page = 1;
+          pages = [];
+          while(results.length > 0)
+            pages.push(results.splice(0,image_limit));
+          populate_results_box(pages[0], 1);
+        }
+      };
+      
+      var search = function(){
+        uri = './tags/' + document.querySelector('.sbox').value.trim().split(' ').join('/');
+        apiCall('GET', uri, null, function(r){
+          switch(document.querySelector('.sort').value)
+          {
+            case 'nna':
+              r.sort(function(a, b){
+                var collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
+                return -1*collator.compare(clean_name(a), clean_name(b));
+              })
+              break;
+            case 'nnd':
+              r.sort(function(a, b){
+                var collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
+                return collator.compare(clean_name(a), clean_name(b));
+              })
+              break;
+            case 'na':
+              r.sort(function(a, b){
+                if(clean_name(a) < clean_name(b)) return 1;
+                if(clean_name(a) > clean_name(b)) return -1;
+                return 0;
+              })
+              break;
+            case 'nd':
+              r.sort(function(a, b){
+                if(clean_name(a) < clean_name(b)) return -1;
+                if(clean_name(a) > clean_name(b)) return 1;
+                return 0;
+              })
+              break;
+            case 'da':
+              r.sort(function(a, b){
+                if(a[2] < b[2]) return -1;
+                if(a[2] > b[2]) return 1;
+                return 0;
+              })
+              break;
+            case 'dd':
+              r.sort(function(a, b){
+                if(a[2] < b[2]) return 1;
+                if(a[2] > b[2]) return -1;
+                return 0;
+              })
+              break;
+          }
+          display_results(r);
+        });
+      };
+
+      var show_all_tags = function(){
+        update_tags(function(tags){
+          w = window.open();
+          w.document.write(tags.join('<br>'));
+          w.document.title = 'All Tags';
+        });
+      };
+      
+      var slideshow = false,
+          slide_idx = -1,
+          slides = [];
+      
+      var start_slideshow = function(evt)
+      {
+        var src = evt.target.src;
+        if (evt.target.src.startsWith(window.location.origin)) {
+          src = src.slice(window.location.origin.length);
+        }
+        slide_idx = slides.indexOf(src);
+
+        var backdrop = document.querySelector('.backdrop');
+        backdrop.style.display = 'inline-block';
+        document.querySelector('.pic').style.display = 'inline-block';
+        document.querySelector('.pic').src = evt.target.src;
+        window.scrollTo(0,0);
+        document.body.style.overflow = 'hidden';
+        slideshow = true;
+        backdrop.requestFullscreen();
+      }
+
+      var end_slideshow = function() {
+        var paginated = (slides.length > image_limit);
+        if (paginated){
+          for (n in pages){
+            var page_num = (n|0) + 1;
+            for (im of pages[n]){
+              if (im.indexOf(slides[slide_idx]) != -1){
+                if (page_num != current_page)
+                  navigate_page(page_num);
+              }
+            }
+          }
+        }
+
+        document.querySelector('.backdrop').style.display = 'None';
+        document.querySelector('.pic').style.display = 'None';
+        document.body.style.overflow = 'visible';
+        window.scrollTo(0,document.querySelector('[src="'+slides[slide_idx]+'"]').getBoundingClientRect().top);
+        slideshow = false;
+        document.exitFullscreen();
+      }
+
+      var previous_slide = function() {
+        slide_idx--;
+        if (slide_idx < 0){ slide_idx = slides.length-1; }
+        document.querySelector('.pic').src = slides[slide_idx];
+      }
+
+      var next_slide = function() {
+        slide_idx++;
+        if (slide_idx > slides.length-1){ slide_idx = 0; }
+        document.querySelector('.pic').src = slides[slide_idx];
+      }
+
+      document.onkeydown = function(evt){
+        if(evt.key == 'Enter' && document.activeElement == document.querySelector('.sbox'))
+        {
+          search();
+        }
+        
+        if (slideshow)
+        {
+          if (evt.key == 'Escape')  // End Slideshow
+          {
+            end_slideshow();
+          }
+          else if (evt.key == 'ArrowLeft' || evt.key == 'ArrowUp')  // Previous Slide
+          {
+            previous_slide();
+          }
+          else  if (evt.key == 'ArrowRight' || evt.key == 'ArrowDown')  // Next Slide
+          {
+            next_slide();
+          }
+        }
+      }
+      
+      var fix_slide_scaling = function(){
+        var im = document.querySelector('.pic');
+        if (im.width > window.innerWidth)
+        {
+          im.style.width = '100%';
+          im.style.height = 'auto';
+        }
+        else
+        {
+          im.style.width = 'auto';
+          im.style.height = '100%';
+        }
+      };
+      
+      var backdrop_clicked = function(evt){
+        var h = evt.target.offsetHeight;
+        var w = evt.target.offsetWidth;
+        
+        if (evt.clientY <= 0.2*h)
+        {
+          end_slideshow();
+        }
+        else if (evt.clientX >= w/2)
+        {
+          next_slide();
+        }
+        else
+        {
+          previous_slide();
+        }
+      }
+      
+      var context_menu_target = null;
+      var open_context_menu = function(evt)
+      {
+        evt.preventDefault();
+        context_menu_target = evt.target;
+        menu = document.querySelector('.context_menu');
+        menu.style.display = 'Block';
+        menu.style.top = evt.pageY+'px';
+        menu.style.left = evt.pageX+'px';
+      }
+
+      document.onclick = function()
+      {
+        if (context_menu_target)
+        {
+          document.querySelector('.context_menu').style.display = 'None';
+          context_menu_target = null;
+        }
+      }
+
+      var edit_tags = function()
+      {
+        var fname = encodeURIComponent(context_menu_target.getAttribute('x-name'));
+        apiCall('GET', './files/'+fname+'/tags', null, function(r){
+          var old_tags = r;
+          var inp = prompt('Please edit tags separated by spaces:', r.join(' '));
+          if (inp !== null)
+          {
+            var new_tags = inp.trim().split(' ');
+            if (new_tags[0] == '')
+            {
+              alert('Files must have at least one tag!');
+            }
+            else
+            {
+              for (t of new_tags)
+              {
+                if (old_tags.indexOf(t) == -1)
+                {
+                  if (window.ALL_TAGS.indexOf(t) == -1)
+                  {
+                    if (confirm('Tag "'+t+'" has not been used before.\nAre you sure you want to add it?'))
+                    {
+                      window.ALL_TAGS.push(t);
+                    }
+                    else
+                    {
+                      continue;
+                    }
+                  }
+                  apiCall('POST', './files/'+fname+'/tags/'+t, null, function(r){
+                    if(r != 'OK'){ alert('Error!'); }
+                  });
+                }
+              }
+              for (t of old_tags)
+              {
+                if (new_tags.indexOf(t) == -1)
+                {
+                  apiCall('DELETE', './files/'+fname+'/tags/'+t, null, function(r){
+                    if(r != 'OK'){ alert('Error!'); }
+                  });
+                }
+              }
+            }
+          }
+        });
+      }
+      
+      var delete_file = function()
+      {
+        var fname = context_menu_target.getAttribute('x-name');
+        alert('Not implemented!\nCurrent File: '+fname);
+      }
+      
+      var update_tags = function(cb){
+        apiCall('GET', './tags', null, function(tags){
+            $('.sbox')
+              .on('keydown', function(evt) {
+                if ( evt.keyCode === $.ui.keyCode.TAB &&
+                    $( this ).autocomplete('instance').menu.active ) {
+                  evt.preventDefault();
+                }
+              })
+              .autocomplete({
+                minLength: 0,
+                source: function( request, response ) {
+                  response( $.ui.autocomplete.filter(
+                    tags, request.term.split(' ').pop() ) );
+              },
+              focus: function() {
+                return false;
+              },
+              select: function( evt, ui ) {
+                var terms = this.value.split(' ');
+                terms.pop();
+                terms.push( ui.item.value );
+                terms.push('');
+                this.value = terms.join(' ');
+                return false;
+              }
+            });
+           window.ALL_TAGS = tags;
+           if(cb){ cb(tags); }
+        });
+      };
+      
+      var search_for_random_tag = function(){
+        update_tags(function(tags){
+          var r = window.crypto.getRandomValues(new Uint32Array(1))[0]/0x100000000;
+          var rtag = tags[Math.floor(r*tags.length)];
+          document.querySelector('.sbox').value = rtag;
+          search();
+        });
+      };
+      
+      var find_random_pics = function(){
+        apiCall('GET', './random', null, display_results);
+      };
+      
+      window.onload = function(){
+        update_tags();
+        find_random_pics();
+      };
+    </script>
+    <style>
+      img
+      {
+        image-orientation: from-image;
+      }
+
+      .thumbnail
+      {
+        height: 20%;
+      }
+      
+      a.file
+      {
+        display: inline-block;
+        color: #000;
+        text-decoration: none;
+        background-color: #e5fbed;
+        padding: 10px;
+        margin: 5px;
+        border-radius: 4px;
+      }
+      
+      a.file:hover
+      {
+        background-color: #f2fdf6;
+      }
+      
+      .results_box
+      {
+        margin: 10px;
+        width: 80%;
+        overflow-wrap: break-word;
+      }
+      
+      .backdrop
+      {
+        display: None;
+        position: absolute;
+        top: -1px;
+        bottom: -1px;
+        left: 0px;
+        background-color: #000;
+        width: 100%;
+        cursor: none;
+      }
+      
+      .pic
+      {
+        display: None;
+        height: 100%;
+        
+        /* Vertical Alignment Voodoo */
+        position: relative;
+        top: 50%;
+        transform: translateY(-50%);
+      }
+      
+      .context_menu
+      {
+        display: None;
+        position: absolute;
+        background-color: #FFF;
+        border:1px solid black;
+        border-radius: 12px;
+        padding: 5px;
+      }
+      
+      .context_menu_button
+      {
+        border-radius: 8px;
+        padding: 5px;
+      }
+      
+      .context_menu_button:hover
+      {
+        background-color: #eaf2ff;
+      }
+      
+      .login_box
+      {
+        display: None;
+        position: float;
+        margin: 10% auto;
+        width: 300px;
+        height: 100px;
+        border: black 1px solid;
+        padding: 50px;
+      }
+      
+      .login_box.show
+      {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <center>
+      <br>
+      <h2>EncryptedNAS</h2><br>
+      <input type='text' class='sbox' onsubmit='search()'>
+      &nbsp;<select class='sort'>
+        <option value='u'>Unsorted</option>
+        <option value='nna'>Natural Name Ascending</option>
+        <option value='nnd' selected='selected'>Natural Name Descending</option>
+        <option value='na'>Name Ascending</option>
+        <option value='nd'>Name Descending</option>
+        <option value='da'>Date Ascending</option>
+        <option value='dd'>Date Descending</option>
+      </select>
+      &nbsp;<input type='button' value='&#128269;' onclick='search()'>
+      &nbsp;<input type='button' value='&#127922;' onclick='find_random_pics()'>
+      &nbsp;<input type='button' value='&#x1F6AA;' onclick='do_logout()'>
+      <br>
+      <div class='results_box'></div>
+      <div class='backdrop' onclick='backdrop_clicked(event)'>
+        <img class='pic' onload='fix_slide_scaling()'>
+      </div>
+      <div class='context_menu'>
+        <div class='context_menu_button' onclick='edit_tags()'>Edit Tags</div>
+        <div class='context_menu_button' onclick='delete_file()'>Delete</div>
+      </div>
+    </center>
+    <div class='login_box'>
+      <h1>Login</h1>
+      <input type='password' id='passbox'>
+      <input type='button' value='Login' onclick='do_login()'>
+    </div>  
+  </body>
+</html>
