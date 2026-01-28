@@ -1,17 +1,23 @@
-import sessen, sys, json, tempfile, os, subprocess, shutil, hashlib, threading, mimetypes, urllib.parse, time, queue, tempfile
+import sessen, sys, json, tempfile, os, subprocess, shutil, hashlib, threading
+import mimetypes, urllib.parse, time, queue, tempfile, shlex
 import multithreaded_sqlite
 config = json.loads(sessen.get_file('config.json'))
 
 nas_helper = sessen.ExtensionProxy('nas_helper')
 logger = sessen.getLogger()
 
-LOCAL_CACHE_DIR = os.path.join(tempfile.gettempdir(), 'EncryptedNAS-Local-Cache')
+LOCAL_CACHE_DIR = os.path.expanduser(os.path.expandvars(
+                    config.get('cache_dir',
+                               os.path.join(tempfile.gettempdir(),
+                                            'EncryptedNAS-Local-Cache'))))
 CACHE_LOCK = threading.Lock()
 
 app_html = sessen.get_file('app.htm')
 persistent = sessen.PersistentDatastore()
 
-db_connection = multithreaded_sqlite.connect(config['database'])
+db_connection = multithreaded_sqlite.connect(
+  os.path.expanduser(config['database'])
+)
 
 def hash_file(path):
   sha1 = hashlib.sha1()
@@ -123,29 +129,42 @@ def _download_from_nas(connection):
   bin_num = get_bin_containing_hash(hash)
   bin_name = 'bin'+str(bin_num)+'.7z'
   rpath = os.path.join(config['path'], bin_name)
-  try:
-    tdir = tempfile.mkdtemp()
-  except:
-    breakpoint()
+  tdir = tempfile.mkdtemp()
   tbin = os.path.join(tdir, bin_name)
   logger.info('Downloading bin to ' + tbin)
-  nas_helper.copy(rpath, tbin)
-  cmd = '"' + config['7z_path'] + '" e "' + tbin + '" -o"' + tdir + '" -p' + config['password']
-  proc = subprocess.run(cmd, capture_output=True)
+  offset = 0
+  with open(tbin, 'wb') as f:
+    import base64
+    while True:
+      buf = base64.b85decode(nas_helper.read(rpath, offset = offset))
+      if not buf:
+        break
+      f.write(buf)
+      offset += len(buf)
+  cmd = (
+    config['7z_path'],
+    'e',
+    tbin,
+    '-o'+shlex.quote(tdir),
+    '-p'+shlex.quote(config['password']),
+  )
+  proc = subprocess.run(cmd, capture_output = True)
   if proc.returncode:
     logger.critical('7z STDOUT: ' + proc.stdout.decode())
     logger.critical('7z STDERR: ' + proc.stderr.decode())
     proc.check_returncode()
   os.remove(tbin)
-  try: os.makedirs(LOCAL_CACHE_DIR)
-  except OSError: pass
+  try:
+    os.makedirs(LOCAL_CACHE_DIR)
+  except OSError:
+    pass
   for file in os.listdir(tdir):
     _, ext = os.path.splitext(file)
     full_path = os.path.join(tdir, file)
     hash = hash_file(full_path)
     cpath = os.path.join(LOCAL_CACHE_DIR, hash + ext)
     try:
-      os.rename(full_path, cpath)
+      shutil.move(full_path, cpath)
     except FileExistsError:
       pass
   shutil.rmtree(tdir)

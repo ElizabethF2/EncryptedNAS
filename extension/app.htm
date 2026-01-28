@@ -18,7 +18,7 @@
 
         var xhr = new XMLHttpRequest();
         xhr.open(method, URL);
-        
+
         xhr.onreadystatechange = function(){
           if(xhr.readyState == 4){
             var res;
@@ -27,7 +27,7 @@
             } catch(e) {
               res = xhr.responseText;
             }
-            
+
             if (res.error == 'Unauthenticated') {
               show_login();
             } else if(callback){
@@ -35,7 +35,7 @@
             }
           }
         }
-        
+
         if(requestBody){
           xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8');
           xhr.send(JSON.stringify(requestBody));
@@ -43,18 +43,18 @@
           xhr.send();
         }
       };
-      
+
       var show_login = function() {
         document.querySelector('.login_box').classList.add('show');
       }
-      
+
       var do_login = function() {
         var password = document.querySelector('#passbox').value;
         apiCall('POST', './login', {'password': password}, function() {
           window.location.reload();
         });
       }
-      
+
       var do_logout = function() {
         if (confirm('Really logout?')) {
           apiCall('POST', './logout', null, function() {
@@ -103,7 +103,7 @@
         window.retry_queue.push(im);
         setTimeout(process_retry_queue, (Math.random()*10000)|1);
       };
-      
+
       var process_retry_queue = function() {
         if (window.retry_queue.length == 0)
         {
@@ -116,38 +116,36 @@
 
       var pages = [],
           current_page = 0;
-      
+
       var navigate_page = function(p){
         if (p == 'n' && current_page < pages.length)
           current_page++;
-        
+
         if (p == 'p' && current_page > 1)
           current_page--;
-        
+
         if (p != 'n' && p != 'p')
           current_page = p;
-        
+
         populate_results_box(pages[current_page-1], current_page);
       };
-
-
 
       var populate_results_box = function(results, page = 0){
         rbox = document.querySelector('.results_box');
         rbox.innerHTML = '';
-        
+
         if (page > 1){
           rbox.innerHTML += '<span onclick="navigate_page(\'p\')">&#11164;</div>';
         }
-        
+
         if (page>0 && page<pages.length){
           rbox.innerHTML += '<span onclick="navigate_page(\'n\')">&#11166;</div>';
         }
-        
+
         if (rbox.innerHTML){
           rbox.innerHTML += '<br>';
         }
-        
+
         if ( (page > 1) || (page>0 && page<pages.length) ){
           rbox.innerHTML += '<br>';
         }
@@ -176,6 +174,10 @@
           window.retry_queue = [];
           delay_load_images();
         }
+        else
+        {
+          rbox.innerHTML = '<b>No Results</b>';
+        }
       };
 
       var display_results = function(results){
@@ -200,7 +202,7 @@
           if (isImage(file))
             slides.push(file[5]);
         }
-        
+
         var paginated = (slides.length > image_limit);
         if (!paginated){
           populate_results_box(results);
@@ -212,7 +214,7 @@
           populate_results_box(pages[0], 1);
         }
       };
-      
+
       var search = function(){
         uri = './tags/' + document.querySelector('.sbox').value.trim().split(' ').join('/');
         apiCall('GET', uri, null, function(r){
@@ -270,11 +272,11 @@
           w.document.title = 'All Tags';
         });
       };
-      
+
       var slideshow = false,
           slide_idx = -1,
           slides = [];
-      
+
       var start_slideshow = function(evt)
       {
         var src = evt.target.src;
@@ -349,7 +351,7 @@
           }
         }
       }
-      
+
       var fix_slide_scaling = function(){
         var im = document.querySelector('.pic');
         if (im.width > window.innerWidth)
@@ -363,11 +365,11 @@
           im.style.height = '100%';
         }
       };
-      
+
       var backdrop_clicked = function(evt){
         var h = evt.target.offsetHeight;
         var w = evt.target.offsetWidth;
-        
+
         if (evt.clientY <= 0.2*h)
         {
           end_slideshow();
@@ -381,7 +383,7 @@
           previous_slide();
         }
       }
-      
+
       var context_menu_target = null;
       var open_context_menu = function(evt)
       {
@@ -450,13 +452,13 @@
           }
         });
       }
-      
+
       var delete_file = function()
       {
         var fname = context_menu_target.getAttribute('x-name');
         alert('Not implemented!\nCurrent File: '+fname);
       }
-      
+
       var update_tags = function(cb){
         apiCall('GET', './tags', null, function(tags){
             $('.sbox')
@@ -488,7 +490,7 @@
            if(cb){ cb(tags); }
         });
       };
-      
+
       var search_for_random_tag = function(){
         update_tags(function(tags){
           var r = window.crypto.getRandomValues(new Uint32Array(1))[0]/0x100000000;
@@ -497,17 +499,23 @@
           search();
         });
       };
-      
+
       var find_random_pics = function(){
         apiCall('GET', './random', null, display_results);
       };
-      
+
       window.onload = function(){
         update_tags();
         find_random_pics();
       };
     </script>
     <style>
+      body
+      {
+        background-color: #000;
+        color: #fff;
+      }
+
       img
       {
         image-orientation: from-image;
@@ -517,7 +525,7 @@
       {
         height: 20%;
       }
-      
+
       a.file
       {
         display: inline-block;
@@ -528,19 +536,19 @@
         margin: 5px;
         border-radius: 4px;
       }
-      
+
       a.file:hover
       {
         background-color: #f2fdf6;
       }
-      
+
       .results_box
       {
         margin: 10px;
         width: 80%;
         overflow-wrap: break-word;
       }
-      
+
       .backdrop
       {
         display: None;
@@ -552,39 +560,39 @@
         width: 100%;
         cursor: none;
       }
-      
+
       .pic
       {
         display: None;
         height: 100%;
-        
+
         /* Vertical Alignment Voodoo */
         position: relative;
         top: 50%;
         transform: translateY(-50%);
       }
-      
+
       .context_menu
       {
         display: None;
         position: absolute;
-        background-color: #FFF;
-        border:1px solid black;
+        background-color: #000;
+        border:1px solid #111;
         border-radius: 12px;
         padding: 5px;
       }
-      
+
       .context_menu_button
       {
         border-radius: 8px;
         padding: 5px;
       }
-      
+
       .context_menu_button:hover
       {
-        background-color: #eaf2ff;
+        background-color: #414c5e;
       }
-      
+
       .login_box
       {
         display: None;
@@ -595,7 +603,7 @@
         border: black 1px solid;
         padding: 50px;
       }
-      
+
       .login_box.show
       {
         display: block;
@@ -606,19 +614,21 @@
     <center>
       <br>
       <h2>EncryptedNAS</h2><br>
-      <input type='text' class='sbox' onsubmit='search()'>
-      &nbsp;<select class='sort'>
-        <option value='u'>Unsorted</option>
-        <option value='nna'>Natural Name Ascending</option>
-        <option value='nnd' selected='selected'>Natural Name Descending</option>
-        <option value='na'>Name Ascending</option>
-        <option value='nd'>Name Descending</option>
-        <option value='da'>Date Ascending</option>
-        <option value='dd'>Date Descending</option>
-      </select>
-      &nbsp;<input type='button' value='&#128269;' onclick='search()'>
-      &nbsp;<input type='button' value='&#127922;' onclick='find_random_pics()'>
-      &nbsp;<input type='button' value='&#x1F6AA;' onclick='do_logout()'>
+      <form autocomplete='off' onsubmit='return false;'>
+        <input type='text' class='sbox' onsubmit='search()'>
+        &nbsp;<select class='sort'>
+          <option value='u'>Unsorted</option>
+          <option value='nna'>Natural Name Ascending</option>
+          <option value='nnd'>Natural Name Descending</option>
+          <option value='na'>Name Ascending</option>
+          <option value='nd'>Name Descending</option>
+          <option value='da'>Date Ascending</option>
+          <option value='dd' selected='selected'>Date Descending</option>
+        </select>
+        &nbsp;<input type='button' value='&#128269;' onclick='search()'>
+        &nbsp;<input type='button' value='&#127922;' onclick='find_random_pics()'>
+        &nbsp;<input type='button' value='&#x1F6AA;' onclick='do_logout()'>
+      </form>
       <br>
       <div class='results_box'></div>
       <div class='backdrop' onclick='backdrop_clicked(event)'>
@@ -633,6 +643,6 @@
       <h1>Login</h1>
       <input type='password' id='passbox'>
       <input type='button' value='Login' onclick='do_login()'>
-    </div>  
+    </div>
   </body>
 </html>
