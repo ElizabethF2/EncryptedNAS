@@ -1,0 +1,11 @@
+{
+  "port": 9000,
+  "max_bin_size": 3145728,
+  "7z_path": "/usr/bin/7z",
+  "path": "Projects/EncryptedNAS",
+  "password": "fugvGTaxOHUTsTKP7F2NuZq6",
+  "database": "db\\files.db",
+  "typos": {
+    "dgo": "dog"
+  }
+}

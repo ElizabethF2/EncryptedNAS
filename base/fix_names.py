@@ -9,7 +9,6 @@ while True:
   if p == '':
     break
   paths.append(p)
-  input()
 
 for path in paths:
   for file in os.listdir(path):

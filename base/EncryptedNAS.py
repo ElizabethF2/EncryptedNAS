@@ -1,6 +1,5 @@
 import sys, webbrowser, requests, json, random, time, tempfile, os, uuid, subprocess, shutil, hashlib, sqlite3, threading, mimetypes, socketserver
 from requests_toolbelt import MultipartEncoder
-sys.path.append('..')
 import path_helper
 
 AVERAGE_COMPRESSION_RATIO = 0.96
@@ -178,8 +177,13 @@ def upload_to_NAS(files, ensure_unique_names=True):
   with open(file_list, 'w', encoding='utf-8') as f:
     for file in file2name.values():
       f.write(file + '\n')
-  cmd = '"' + config['7z_path'] + '" a "' + tbin + '" -mhe -mx=9 -p' + config['password'] + ' -scsWIN @"'+file_list+'"'
-  subprocess.check_call(cmd)
+  # cmd = '"' + config['7z_path'] + '" a "' + tbin + '" -mhe -mx=9 -p' + config['password'] + ' -scsWIN @"'+file_list+'"'
+  subprocess.check_call((config['7z_path'], 'a', tbin,
+                         '-mhe',
+                         '-mx=9',
+                         '-p'+config['password'],
+                         '-scsWIN',
+                         '@'+file_list))
 
   # Restore old file names
   for old, new in file2name.items():
@@ -282,8 +286,10 @@ def extract_bin_to_dir(bin_num, out_dir):
   rpath = os.path.join(nas_path, bin_name)
   tbin = os.path.join(out_dir, bin_name)
   shutil.copy2(rpath, tbin)
-  cmd = cmd = '"' + config['7z_path'] + '" e "' + tbin + '" -o"' + out_dir + '" -p' + config['password']
-  subprocess.check_call(cmd)
+  # cmd = cmd = '"' + config['7z_path'] + '" e "' + tbin + '" -o"' + out_dir + '" -p' + config['password']
+  subprocess.check_call((config['7z_path'], 'e', tbin,
+                         '-o' + out_dir,
+                         '-p' + config['password']))
   os.remove(tbin)
 
 def delete_file_from_database(name):

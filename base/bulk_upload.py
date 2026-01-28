@@ -1,4 +1,4 @@
-import os, EncryptedNAS
+import os, re, EncryptedNAS
 
 try: raw_input
 except NameError: raw_input = input
@@ -11,19 +11,29 @@ path = raw_input('> ')
 if path[0] == '"' and path[-1] == '"':
   path = path[1:-1]
 
+has_invalid_filename = False
+typos = EncryptedNAS.config.get('typos', {})
 for root, dirs, pfiles in os.walk(path):
   if root == path:
     continue
-  tags = os.path.split(root)[1].split()
+  tags = list(map(lambda i: typos[i] if i in typos else i, os.path.split(root)[1].split()))
   files = []
   for file in pfiles:
     if file in ['Thumbs.db', 'desktop.ini']:
       continue
+    censored_file = re.sub(r'[^A-Za-z0-9|\.| |\-|_|!|"|\'|#|\[|\]|\(|\)|\+]', '?', file)
+    if file != censored_file:
+      has_invalid_filename = True
+      print('\n\nBad filename:', root, file)
+      print(censored_file, '\n')
     fp = os.path.join(root, file)
     files.append(fp)
     extensions.add(os.path.splitext(fp)[1])
   file_tag_pairs.append((files,tags))
   print(files[0] + ' - ' + str(tags))
+
+if has_invalid_filename:
+  raise Exception('Invalid filenames')
 
 file_queue = []
 for files, tags in file_tag_pairs:
