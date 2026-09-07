@@ -101,7 +101,7 @@ def get_bin_containing_hash(hash):
 
 def _send_from_cache(connection):
   fname = connection.args['filename']
-  cache_path = os.path.join(LOCAL_CACHE_DIR, fname)
+  cache_path = os.path.abspath(os.path.join(LOCAL_CACHE_DIR, fname))
   content_type, _ = mimetypes.guess_type(cache_path)
   with open(cache_path, 'rb') as f:
     size = os.fstat(f.fileno()).st_size
@@ -150,8 +150,8 @@ def _download_from_nas(connection):
   )
   proc = subprocess.run(cmd, capture_output = True)
   if proc.returncode:
-    logger.critical('7z STDOUT: ' + proc.stdout.decode())
-    logger.critical('7z STDERR: ' + proc.stderr.decode())
+    logger.critical('7z STDOUT: ' + repr(proc.stdout))
+    logger.critical('7z STDERR: ' + repr(proc.stderr))
     proc.check_returncode()
   os.remove(tbin)
   try:
